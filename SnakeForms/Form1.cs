@@ -1,39 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace SnakeForms
 {
     public partial class Snake : Form
     {
-        int cols = 50, rows = 25, score = 0, dx = 0, dy = 0, front = 0, back = 0;
-        Piece[] snake = new Piece[1250];
-        List<int> avaliable = new List<int>();
-        bool[,] visit;
+        private const int GridSize = 20;
+        private const int Columns = 50;
+        private const int Rows = 25;
+        private int score = 0;
+        private int dx = 0;
+        private int dy = 0;
+        private int front = 0;
+        private int back = 0;
 
-        Random rand = new Random(); 
-        Timer timer = new Timer();
-
+        private readonly Piece[] snake = new Piece[Columns * Rows];
+        private readonly List<int> available = new List<int>();
+        private readonly bool[,] visit = new bool[Rows, Columns];
+        private readonly Random rand = new Random();
+        private readonly Timer timer = new Timer();
 
         public Snake()
         {
             InitializeComponent();
-            initial();
-            launchTimer();
+            InitializeGame();
+            InitializeTimer();
         }
 
-        private void launchTimer()
+        private void InitializeTimer()
         {
             timer.Interval = 100;
-            timer.Tick += move;
+            timer.Tick += Move;
             timer.Start();
-
         }
 
         private void Snake_KeyDown_1(object sender, KeyEventArgs e)
@@ -42,109 +42,136 @@ namespace SnakeForms
             switch (e.KeyCode)
             {
                 case Keys.Right:
-                    dx = 20;
+                    dx = GridSize;
                     break;
                 case Keys.Left:
-                    dx = -20;
+                    dx = -GridSize;
                     break;
                 case Keys.Up:
-                    dy = -20;
+                    dy = -GridSize;
                     break;
                 case Keys.Down:
-                    dy = 20;
+                    dy = GridSize;
                     break;
             }
         }
 
-        private void move(object sender, EventArgs e)
+        private void Move(object sender, EventArgs e)
         {
-           int x = snake[front].Location.X, y = snake[front].Location.Y;
-            if(dx == 0 && dy == 0)
+            int x = snake[front].Location.X;
+            int y = snake[front].Location.Y;
+
+            if (dx == 0 && dy == 0)
             {
                 return;
             }
-            if (gameover(x+dx,y+dy))
+
+            if (Gameover(x + dx, y + dy))
             {
-                timer.Stop();
-                MessageBox.Show("Koniec Gry");
+                EndGame();
+                return;
             }
-            if (collisionFood(x + dx, y + dy))
+
+            if (CollisionFood(x + dx, y + dy))
             {
-                score += 1;
-                lblScore.Text = "Wynik: " + score.ToString();
-                if (hits((y + dy) / 20, (x + dx) / 20))
-                {
-                    return;
-                };
-                Piece head = new Piece(x + dx, y + dy);
-                front = (front - 1 + 1250) % 1250;
-                snake[front] = head;
-                visit[head.Location.Y / 20, head.Location.X / 20] = true;
-                Controls.Add(head);
-                randomFood();
+                HandleFoodCollision(x + dx, y + dy);
             }
             else
             {
-                if (hits((y + dy) / 20, (x + dx) / 20)) return;
-                visit[snake[back].Location.Y / 20, snake[back].Location.X / 20] = false;
-                front = (front - 1 + 1250) % 1250;
-                snake[front] = snake[back];
-                snake[front].Location = new Point(x + dx, y + dy);
-                back = (back - 1 + 1250) % 1250;
-                visit[(y+dy)/20,(x+dx)/20] = true;  
+                HandleRegularMove(x + dx, y + dy);
             }
         }
 
-
-        private void randomFood()
+        private void HandleFoodCollision(int x, int y)
         {
-            avaliable.Clear();
-            for (int i = 0; i < rows; i++)
-                for (int j = 0; j < cols; j++)
-                    if (!visit[i, j]) avaliable.Add(i * cols + j);
-            int idx = rand.Next(avaliable.Count) % avaliable.Count;
-            lblFood.Left = (avaliable[idx] * 20) % Width;
-            lblFood.Top = (avaliable[idx] * 20) / Width;
-            
+            score += 1;
+            lblScore.Text = "Wynik: " + score.ToString();
+
+            if (Hits(y / GridSize, x / GridSize))
+            {
+                return;
+            }
+
+            Piece head = new Piece(x, y);
+            front = (front - 1 + Columns * Rows) % (Columns * Rows);
+            snake[front] = head;
+            visit[y / GridSize, x / GridSize] = true;
+            Controls.Add(head);
+            RandomFood();
         }
 
-        private bool hits(int x, int y)
+        private void HandleRegularMove(int x, int y)
+        {
+            if (Hits(y / GridSize, x / GridSize)) return;
+            visit[snake[back].Location.Y / GridSize, snake[back].Location.X / GridSize] = false;
+            front = (front - 1 + Columns * Rows) % (Columns * Rows);
+            snake[front] = snake[back];
+            snake[front].Location = new Point(x, y);
+            back = (back - 1 + Columns * Rows) % (Columns * Rows);
+            visit[y / GridSize, x / GridSize] = true;
+        }
+
+        private void RandomFood()
+        {
+            available.Clear();
+
+            for (int i = 0; i < Rows; i++)
+            {
+                for (int j = 0; j < Columns; j++)
+                {
+                    if (!visit[i, j]) available.Add(i * Columns + j);
+                }
+            }
+
+            int idx = rand.Next(available.Count) % available.Count;
+            lblFood.Left = (available[idx] % Columns) * GridSize;
+            lblFood.Top = (available[idx] / Columns) * GridSize;
+        }
+
+        private bool Hits(int x, int y)
         {
             if (visit[x, y])
             {
-                timer.Stop();
-                MessageBox.Show("Snake udeżył w ciało");
+                EndGame();
                 return true;
             }
             return false;
         }
 
-        private bool collisionFood(int x, int y)
+        private bool CollisionFood(int x, int y)
         {
-           return x == lblFood.Location.X && y == lblFood.Location.Y;   
+            return x == lblFood.Location.X && y == lblFood.Location.Y;
         }
 
-        private bool gameover(int x, int y)
+        private bool Gameover(int x, int y)
         {
-            return x < 0 || y < 0 || x > 980 || y > 480;
+            return x < 0 || y < 0 || x >= Columns * GridSize || y >= Rows * GridSize;
         }
 
-        private void initial()
+        private void EndGame()
         {
-            visit = new bool[rows, cols];
-            Piece head = new Piece((rand.Next() % cols) * 20, (rand.Next() % rows) * 20);
-            lblFood.Location = new Point((rand.Next() % cols)*20, (rand.Next() % rows) *20);
-            for (int i = 0; i < rows; i++)
+            timer.Stop();
+            MessageBox.Show("Koniec Gry");
+        }
+
+        private void InitializeGame()
+        {
+            Piece head = new Piece((rand.Next() % Columns) * GridSize, (rand.Next() % Rows) * GridSize);
+            lblFood.Location = new Point((rand.Next() % Columns) * GridSize, (rand.Next() % Rows) * GridSize);
+
+            for (int i = 0; i < Rows; i++)
             {
-                for(int j = 0; j < cols; j++)
+                for (int j = 0; j < Columns; j++)
                 {
                     visit[i, j] = false;
-                    avaliable.Add(i * cols + j);
+                    available.Add(i * Columns + j);
                 }
-                visit[head.Location.Y / 20, head.Location.X / 20] = true;
-                avaliable.Remove(head.Location.Y / 20 * cols + head.Location.X/20);
-                Controls.Add(head); snake[front] = head;
             }
+
+            visit[head.Location.Y / GridSize, head.Location.X / GridSize] = true;
+            available.Remove(head.Location.Y / GridSize * Columns + head.Location.X / GridSize);
+            Controls.Add(head);
+            snake[front] = head;
         }
     }
 }
